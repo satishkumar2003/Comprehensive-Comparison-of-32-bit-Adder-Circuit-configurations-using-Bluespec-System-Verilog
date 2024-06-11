@@ -2,30 +2,25 @@ package CarrySelect;
 
 import functions::*;
 
-typedef Bit#(32) Word;
-//typedef struct { Word sum; Bit#(1) cout; } AdderResult deriving(Bits,Eq);
-
-interface CSE_IFC;
-    method Action start(Word in1, Word in2, Bit#(1) cin);
-    //method AdderResult return_result();
-    method Bit#(32) return_sum();
+interface CSE_IFC#(type inp_sz);
+    method Action start(Bit#(inp_sz) in1, Bit#(inp_sz) in2, Bit#(1) cin);
+    method Bit#(inp_sz) return_sum();
     method Bit#(1) return_carry();
     method Bool overflow();
 endinterface
 
 
 
-(* synthesize *)
-module mkCSE32(CSE_IFC);
+//(* synthesize *)
+module mkCSE32(CSE_IFC#(inp_sz)) provisos(Add#(inp_sz,1,out_sz),Mul#(a__,8,inp_sz),Add#(b__,8,out_sz));
 
     // input registers
-    Reg#(Word) in1 <- mkReg(0);
-    Reg#(Word) in2 <- mkReg(0);
+    Reg#(Bit#(inp_sz)) in1 <- mkReg(0);
+    Reg#(Bit#(inp_sz)) in2 <- mkReg(0);
     Reg#(Bit#(1)) cin <- mkReg(0);
     
     // result register
-    Reg#(Bit#(33)) result <- mkReg(0);
-    //Reg#(AdderResult) result <- mkReg(0);
+    Reg#(Bit#(out_sz)) result <- mkReg(0);
     
     // Is result available?
     Reg#(Bool) available <- mkReg(True);
@@ -35,27 +30,24 @@ module mkCSE32(CSE_IFC);
         available <= True;
     endrule
 
-    method Action start(Word in1_inp, Word in2_inp, Bit#(1) cin_inp);
+    method Action start(Bit#(inp_sz) in1_inp, Bit#(inp_sz) in2_inp, Bit#(1) cin_inp);
         in1 <= in1_inp;
         in2 <= in2_inp;
         cin <= cin_inp;
         available <= False;
     endmethod
 
-    //method AdderResult return_result() if (available==True);
-    	//return result;
-    //endmethod
-    
-    method Word return_sum();
-    	return result[31:0];
+    method Bit#(inp_sz) return_sum();
+    	return result[valueof(inp_sz)-1:0];
     endmethod
     
     method Bit#(1) return_carry();
-    	return result[32];
+    	return result[valueof(inp_sz)];
     endmethod
 
     method Bool overflow if (available==True);
-    	Bit#(1) overflow_flag = ((~in1[31]^in2[31])&(in2[31]^result[31]));
+    	Integer index = valueof(inp_sz)-1;
+    	Bit#(1) overflow_flag = ((~in1[index]^in2[index])&(in2[index]^result[index]));
     	if (overflow_flag==1) return True;
     	else return False;
     endmethod

@@ -2,38 +2,22 @@ package Testbench;
 
 import CarrySelect::*;
 import functions::*;
+import LFSR::*;
 
 module mkTestbench(Empty);
-    CSE_IFC adder_1 <- mkCSE32;
+    
+    LFSR#(Bit#(32)) rng_a <- mkLFSR_32;
+    LFSR#(Bit#(32)) rng_b <- mkLFSR_32;
+    LFSR#(Bit#(8)) rng_cin <- mkLFSR_8;
+    
+    Reg#(Bit#(8)) count <- mkReg(0);
+    
+    CSE_IFC#(32) adder_1 <- mkCSE32;
     Reg#(Bit#(2)) state <- mkReg(0); // for testbench working
-
-    // inputs
-    //Reg#(Word) a <- mkReg('hF0000000);
-    //Reg#(Word) b <- mkReg('hF0000000);
-    //Reg#(Bit#(1)) cin <- mkReg(0);
-    
-        
-    
-    //Reg#(Word) a <- mkReg('h0300F001);
-    //Reg#(Word) b <- mkReg('h000023F6);
-    //Reg#(Bit#(1)) cin <- mkReg(1);
-    
-        
-    
-    //Reg#(Word) a <- mkReg('hFFF00000);
-    //Reg#(Word) b <- mkReg('hF0100000);
-    //Reg#(Bit#(1)) cin <- mkReg(0);
-    
- 
- 
-    //Reg#(Word) a <- mkReg('h4E6);
-    //Reg#(Word) b <- mkReg('hFFFFFB1A);
-    //Reg#(Bit#(1)) cin <- mkReg(0);
- 
  
     
-    Reg#(Word) a <- mkReg('h70000000);
-    Reg#(Word) b <- mkReg('h10000000);
+    Reg#(Bit#(32)) a <- mkReg('h7000);
+    Reg#(Bit#(32)) b <- mkReg('h1000);
     Reg#(Bit#(1)) cin <- mkReg(1);
     
     
@@ -41,36 +25,61 @@ module mkTestbench(Empty);
     // outputs
     Reg#(Bit#(32)) sum <- mkReg(0);
     Reg#(Bit#(1)) cout <- mkReg(0);
-    //Reg#(AdderResult) result <- mkReg(0);
     
     // flags
     Reg#(Bool) overflow_flag <- mkReg(False);
 
-    rule initialize if (state==0);
-        $display("\n%32b (%d) + %32b (%d) + %32b =",a,abs(a),b,abs(b),cin);
-        adder_1.start(a,b,cin); 
-        state <= 1;
-    endrule
+	rule initialize if (state==0);
+		rng_a.seed('hAFD7);
+		rng_b.seed('hC9B1);
+		rng_cin.seed('hA5);
+		state <= 1;
+	endrule
 
-    rule get_results if (state==1);
-    	sum <= adder_1.return_sum();
+	rule generate_random_inputs if (state==1);
+		a <= unpack(rng_a.value()[31:0]); rng_a.next();
+		b <= unpack(rng_b.value()[31:0]); rng_b.next();
+		cin <= rng_cin.value()[3]; rng_cin.next();
+		count <= count + 1;
+		adder_1.start(rng_a.value()[31:0],rng_b.value()[31:0],rng_cin.value()[3]);
+		state <= 2;
+	endrule
+  
+  	rule get_results if (state==2);
+    	sum <= unpack(adder_1.return_sum());
     	cout <= adder_1.return_carry();
-        overflow_flag <= adder_1.overflow();
-        state <= 2;    
+    	overflow_flag <= adder_1.overflow();
+   		state <= 3;
     endrule
-    
-    rule display_results if (state==2);
-        $display("Sum = %32b (%d)",sum,abs(sum));
-        $display("Cout = %32b",cout);
-        $display("Overflow Flag = %0h\n", adder_1.overflow());
-        $finish(0);
+      
+    rule display_results if (state==3);
+        if (count < 30) begin
+        	state <= 1;
+        	if (check_answer(a,b,cin,sum,cout))
+        		$display("Test Passed");
+        	else begin 
+        		$display("Test Failed: ");
+        		$display("  %32b\n+ %32b\n+\t\t\t\t %0b\n= \n  %32b",a,b,cin,sum);
+        		$display("Cout = %0b",cout);
+        		$display(" %33b",zeroExtend(a) + zeroExtend(b) + {32'b0,cin});
+        		$display("Overflow Flag = %0h\n", overflow_flag);
+        	end
+        	if (overflow_flag) $display("Overflow occured");
+        end else $finish(0);
     endrule
     
 endmodule
 
-function Bit#(32) abs(Bit#(32) in);
-  Bit#(32) abs_val = 1;
-  if (in[32-1] == 1) abs_val = ~in + 'b1;
+function Bool check_answer(Bit#(m) a, Bit#(m) b, Bit#(1) cin, Bit#(m) sum, Bit#(1) cout) provisos(Add#(m,1,n));
+	Bit#(n) expected_sum = zeroExtend(a) + zeroExtend(b) + {'b0,cin};
+	Bit#(n) calculated_sum = {cout,sum};
+	
+	return (expected_sum==calculated_sum);
+endfunction
+
+function Bit#(m) abs(Bit#(m) in);
+  Bit#(m) abs_val = 1;
+  if (in[valueof(m)-1] == 1) abs_val = ~in + 'b1;
   else abs_val = in;
   return abs_val;
 endfunction
