@@ -1,28 +1,27 @@
 package CarryLookAhead;
 
-typedef Bit#(32) Word;
-//typedef struct { Word sum; Bit#(1) cout; } AdderResult deriving(Bits,Eq);
+import functions::*;
 
-interface CLA_IFC;
-    method Action start(Word in1, Word in2, Bit#(1) cin);
+interface CLA_IFC#(type inp_sz);
+    method Action start(Bit#(inp_sz) in1, Bit#(inp_sz) in2, Bit#(1) cin);
     //method AdderResult return_result();
-    method Bit#(32) return_sum();
+    method Bit#(inp_sz) return_sum();
     method Bit#(1) return_carry();
     method Bool overflow();
 endinterface
 
 
 
-(* synthesize *)
-module mkCLA32(CLA_IFC);
+//(* synthesize *)
+module mkCLA32(CLA_IFC#(inp_sz)) provisos(Add#(inp_sz,1,out_sz));
 
-    // input registers
-    Reg#(Word) in1 <- mkReg(0);
-    Reg#(Word) in2 <- mkReg(0);
+    // input regisWters
+    Reg#(Bit#(inp_sz)) in1 <- mkReg(0);
+    Reg#(Bit#(inp_sz)) in2 <- mkReg(0);
     Reg#(Bit#(1)) cin <- mkReg(0);
     
     // result register
-    Reg#(Bit#(33)) result <- mkReg(0);
+    Reg#(Bit#(out_sz)) result <- mkReg(0);
     //Reg#(AdderResult) result <- mkReg(0);
     
     // Is result available?
@@ -33,7 +32,7 @@ module mkCLA32(CLA_IFC);
         available <= True;
     endrule
 
-    method Action start(Word in1_inp, Word in2_inp, Bit#(1) cin_inp);
+    method Action start(Bit#(inp_sz) in1_inp, Bit#(inp_sz) in2_inp, Bit#(1) cin_inp);
         in1 <= in1_inp;
         in2 <= in2_inp;
         cin <= cin_inp;
@@ -44,38 +43,23 @@ module mkCLA32(CLA_IFC);
     	//return result;
     //endmethod
     
-    method Word return_sum();
-    	return result[31:0];
+    method Bit#(inp_sz) return_sum();
+    	return result[valueof(inp_sz)-1:0];
     endmethod
     
     method Bit#(1) return_carry();
-    	return result[32];
+    	return result[valueof(inp_sz)];
     endmethod
 
     method Bool overflow if (available==True);
-    	Bit#(1) overflow_flag = ((~in1[31]^in2[31])&(in2[31]^result[31]));
+    	Integer index = valueof(inp_sz)-1;
+    	Bit#(1) overflow_flag = ((~in1[index]^in2[index])&(in2[index]^result[index]));
     	if (overflow_flag==1) return True;
     	else return False;
     endmethod
 endmodule
 
 
-function Bit#(33) compute(Word in1, Word in2, Bit#(1) cin);
-
-    Word p = in1^in2;
-    Word g = in1&in2;
-    
-    Bit#(33) carry = zeroExtend(cin);
-    
-    for (int i = 1; i <= 32; i = i + 1) 
-    	carry[i] = (carry[i-1] & p[i-1]) | g[i-1];
-
-	
-    Word sum_val = p^carry[31:0];
-
-    
-    return {carry[32],sum_val};
-endfunction 
 
 endpackage
 
@@ -90,4 +74,6 @@ Synthesizer in Vivado results in the same diagrams
 	carry[6] = ((((((cin&p[0]|g[0])&p[1]|g[1])&p[2]|g[2])&p[3]|g[3])&p[4]|g[4])&p[5]|g[5]);
 	carry[7] = (((((((cin&p[0]|g[0])&p[1]|g[1])&p[2]|g[2])&p[3]|g[3])&p[4]|g[4])&p[5]|g[5])&p[6]|g[6]);
 	carry[8] = ((((((((cin&p[0]|g[0])&p[1]|g[1])&p[2]|g[2])&p[3]|g[3])&p[4]|g[4])&p[5]|g[5])&p[6]|g[6])&p[7]|g[7]);
+	carry[9] = ((((((((((cin&p[0]|g[0])&p[1]|g[1])&p[2]|g[2])&p[3]|g[3])&p[4]|g[4])&p[5]|g[5])&p[6]|g[6])&p[7]|g[7])&p[8]|g[8]);
+	
 */
